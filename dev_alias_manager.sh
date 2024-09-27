@@ -278,11 +278,13 @@ validate_alias() {
 detect_new_device() {
     log "INFO" "$(get_message "waiting_device")"
 
-    # 使用 timeout 命令来限制 udevadm monitor 的运行时间
-    timeout "$TIMEOUT" udevadm monitor --subsystem-match=usb --property | while read -r line; do
+    timeout "$TIMEOUT" udevadm monitor --kernel --subsystem-match=usb | while read -r line; do
         if [[ $line == *"add"* ]]; then
             log "INFO" "$(get_message "new_device_detected")"
 
+            # 从 udevadm monitor 输出中获取设备路径
+            device_path=$(echo "$line" | awk '{print $NF}')
+            
             # 检查是否已锁定，确保每次只能处理一个设备
             if [ -f "$TMP_DIR/device_processing.lock" ]; then
                 log "INFO" "$(get_message "device_processing_busy")"
@@ -302,50 +304,11 @@ detect_new_device() {
             fi
 
             # 获取设备信息
-            # new_device_info=$(udevadm info -e | grep -Pzo '(?s)P: .*?\n\n' | grep -a 'SUBSYSTEM=="tty"' | tail -n 1)
-            # new_device_info=$(udevadm info -e | tr -d '\000' | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
-            new_device_info=$(udevadm info -e | tr -d '\000' | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
-            log "DEBUG" "Filtered device info before cleanup: $new_device_info"
-
-            # 检查是否捕获到空设备信息
-            if [ -z "$new_device_info" ]; then
-                log "ERROR" "No device information captured, skipping..."
-                continue
-            fi
-
-            new_device_info=$(echo "$new_device_info" | sed 's/\x00//g')  # 进一步清理空字符
-            log "DEBUG" "Cleaned device info: $new_device_info"
-
-            if [ -z "$new_device_info" ]; then
-                log "WARNING" "$(get_message "device_removed")"
-                rm -f "$TMP_DIR/device_processing.lock"  # 释放锁
-                continue
-            fi
-            
-            device_node=$(echo "$new_device_info" | grep 'DEVNAME=' | cut -d'=' -f2)
-            log "INFO" "$(get_message "new_device") $device_node"
-
-            # 使用重试机制等待设备节点准备好
-            local max_retries=5
-            local retry_interval=1  # 每次等待1秒
-            local retries=0
-
-            while [ ! -e "$device_node" ] && [ $retries -lt $max_retries ]; do
-                log "INFO" "$(get_message "waiting_for_device") ($((retries + 1))/$max_retries)"
-                sleep $retry_interval
-                retries=$((retries + 1))
-            done
-
-            if [ -e "$device_node" ]; then
-                log "INFO" "$(get_message "device_ready") $device_node"
-                get_device_info "$device_node"
-            else
-                log "ERROR" "$(get_message "device_not_ready")"
-            fi
+            get_device_info "$device_path"
 
             # 处理完该设备后，继续检测下一个设备，释放锁
             rm -f "$TMP_DIR/device_processing.lock"
-            log "INFO" "$(get_message "device_processed") $device_node"
+            log "INFO" "$(get_message "device_processed") $device_path"
         fi
     done
 
@@ -354,35 +317,48 @@ detect_new_device() {
 
 # 获取设备信息的函数
 get_device_info() {
-    local device_node=$1
-    local device_info
-    
-    device_info=$(udevadm info -a -n "$device_node")
-    if [ -z "$device_info" ]; then
-        log "WARNING" "$(get_message "device_removed")"
-        return
-    fi
+    local device_path=$1
+    local device_info=$(udevadm info --query=all --name="$device_path")
+    log "DEBUG" "Full device info: $device_info"
 
-    local idVendor=$(echo "$device_info" | grep -m1 'idVendor' | awk -F '"' '{print $2}')
-    local idProduct=$(echo "$device_info" | grep -m1 'idProduct' | awk -F '"' '{print $2}')
-    local serial=$(echo "$device_info" | grep -m1 'serial' | awk -F '"' '{print $2}')
+    # 提取通用设备信息
+    local devname=$(echo "$device_info" | grep 'DEVNAME=' | cut -d'=' -f2)
+    local subsystem=$(echo "$device_info" | grep 'SUBSYSTEM=' | cut -d'=' -f2)
+    local idVendor=$(echo "$device_info" | grep 'ID_VENDOR_ID=' | cut -d'=' -f2)
+    local idProduct=$(echo "$device_info" | grep 'ID_MODEL_ID=' | cut -d'=' -f2)
+    local serial=$(echo "$device_info" | grep 'ID_SERIAL_SHORT=' | cut -d'=' -f2)
+    local model=$(echo "$device_info" | grep 'ID_MODEL=' | cut -d'=' -f2)
 
-    # 如果找不到 serial，尝试其他可能的属性名
+    # 如果没有找到 serial，尝试其他可能的属性
     if [ -z "$serial" ]; then
-        log "WARNING" "$(get_message "serial_not_found")"
-        serial=$(echo "$device_info" | grep -m1 -E 'serial|SerialNumber' | awk -F '"' '{print $2}')
+        serial=$(echo "$device_info" | grep -E 'ID_SERIAL=|ID_SERIAL_SHORT=' | cut -d'=' -f2 | head -n1)
     fi
 
-    log "INFO" "$(get_message "device_info")"
-    log "INFO" "idVendor: $idVendor"
-    log "INFO" "idProduct: $idProduct"
-    log "INFO" "serial: $serial"
+    # 如果还是没有找到必要的信息，尝试使用 udevadm info -a 命令
+    if [ -z "$idVendor" ] || [ -z "$idProduct" ]; then
+        local detailed_info=$(udevadm info -a -n "$device_path")
+        idVendor=$(echo "$detailed_info" | grep -m1 'idVendor' | awk -F '"' '{print $2}')
+        idProduct=$(echo "$detailed_info" | grep -m1 'idProduct' | awk -F '"' '{print $2}')
+    fi
 
-    if grep -q "$idVendor.*$idProduct" "$DEVICE_RECORD_FILE"; then
-        log "INFO" "$(get_message "device_recorded")"
-        handle_existing_device "$idVendor" "$idProduct"
+    log "INFO" "Device Information:"
+    log "INFO" "Device Node: $devname"
+    log "INFO" "Subsystem: $subsystem"
+    log "INFO" "Vendor ID: $idVendor"
+    log "INFO" "Product ID: $idProduct"
+    log "INFO" "Serial: $serial"
+    log "INFO" "Model: $model"
+
+    # 根据设备信息决定是否需要创建别名
+    if [ -n "$idVendor" ] && [ -n "$idProduct" ]; then
+        if grep -q "$idVendor.*$idProduct" "$DEVICE_RECORD_FILE"; then
+            log "INFO" "$(get_message "device_recorded")"
+            handle_existing_device "$idVendor" "$idProduct"
+        else
+            record_new_device "$idVendor" "$idProduct" "$serial" "$model" "$devname"
+        fi
     else
-        record_new_device "$idVendor" "$idProduct" "$serial"
+        log "WARNING" "Unable to determine vendor and product ID for this device"
     fi
 }
 
@@ -406,6 +382,8 @@ record_new_device() {
     local idVendor=$1
     local idProduct=$2
     local serial=$3
+    local model=$4
+    local devname=$5
 
     log "INFO" "$(get_message "recording_device")"
     local alias_name
@@ -414,7 +392,8 @@ record_new_device() {
         alias_name="${AUTO_NAME_PREFIX}${idVendor}_${idProduct}"
     else
         while true; do
-            read -p "$(get_message "enter_alias")" alias_name
+            read -p "$(get_message "enter_alias") [$model]: " alias_name
+            alias_name=${alias_name:-$model}
             if validate_alias "$alias_name"; then
                 if ! check_name_conflict "$alias_name"; then
                     break
@@ -428,7 +407,14 @@ record_new_device() {
         log "ERROR" "$(get_message "backup_failed")"
         return
     fi
-    if ! echo "SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"$idVendor\", ATTRS{idProduct}==\"$idProduct\", SYMLINK+=\"$alias_name\"" | sudo tee -a "$DEVICE_RECORD_FILE" > /dev/null; then
+
+    local rule="SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"$idVendor\", ATTRS{idProduct}==\"$idProduct\""
+    if [ -n "$serial" ]; then
+        rule+=", ATTRS{serial}==\"$serial\""
+    fi
+    rule+=", SYMLINK+=\"$alias_name\""
+
+    if ! echo "$rule" | sudo tee -a "$DEVICE_RECORD_FILE" > /dev/null; then
         log "ERROR" "$(get_message "write_error")"
         return
     fi
@@ -438,7 +424,7 @@ record_new_device() {
     fi
     log "INFO" "$(get_message "device_alias_applied") /dev/$alias_name"
     
-    wait_for_symlink "$alias_name"
+    wait_for_symlink "$alias_name" "$devname"
 }
 
 # 重新加载udev规则
