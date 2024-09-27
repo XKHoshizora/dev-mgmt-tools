@@ -3,7 +3,7 @@
 
 # 向 MESSAGES 数组中添加键值对,其中键是消息的标识符,值是消息的内容
 MESSAGES=(
-    [menu_title]="USB Device Manager"
+    [menu_title]="Device Alias Manager"
     [menu_1]="Listen for new devices"
     [menu_2]="View recorded devices"
     [menu_3]="Show detailed device information"
