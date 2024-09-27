@@ -109,11 +109,11 @@ check_device_record_file() {
 
 # 初始化函数
 initialize() {
-    echo "Debug: Starting initialization"
+    # echo "Debug: Starting initialization"
     set_language  # 设置语言
-    echo "Debug: Language set, MESSAGES array:"
-    declare -p MESSAGES
-    
+    # echo "Debug: Language set, MESSAGES array:"
+    # declare -p MESSAGES
+
     check_sudo  # 检查sudo权限
     
     # 检查 udevadm 是否存在
@@ -143,7 +143,7 @@ check_and_clean_lock() {
 
 # 设置语言
 set_language() {
-    echo "Debug: Setting language, LANGUAGE=$LANGUAGE"
+    # echo "Debug: Setting language, LANGUAGE=$LANGUAGE"
     # 优先使用配置文件中的 LANGUAGE，如果为空则使用系统 LANG 变量
     if [ -z "$LANGUAGE" ]; then
         if [ -n "$LANG" ]; then
@@ -170,23 +170,23 @@ set_language() {
         source "$LANG_DIR/en.sh"
     fi
 
-    # debug 输出
-    if [ -f "$lang_file" ]; then
-        echo "Debug: Loading language file: $lang_file"
-        source "$lang_file"
-        echo "Debug: MESSAGES array after loading:"
-        declare -p MESSAGES
-    else
-        echo "Error: Language file not found: $lang_file"
-    fi
+    # # debug 输出
+    # if [ -f "$lang_file" ]; then
+    #     echo "Debug: Loading language file: $lang_file"
+    #     source "$lang_file"
+    #     echo "Debug: MESSAGES array after loading:"
+    #     declare -p MESSAGES
+    # else
+    #     echo "Error: Language file not found: $lang_file"
+    # fi
 }
 
 # 获取本地化消息
 get_message() {
     local key="$1"
-    echo "Debug: Getting message for key '$key'"
+    # echo "Debug: Getting message for key '$key'"
     local message="${MESSAGES[$key]}"
-    echo "Debug: Retrieved message: '$message'"
+    # echo "Debug: Retrieved message: '$message'"
     
     if [ -z "$message" ]; then
         message="$key"  # 如果没有找到翻译，使用键名作为消息

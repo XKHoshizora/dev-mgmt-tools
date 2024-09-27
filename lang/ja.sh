@@ -1,8 +1,7 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
 
-declare -A MESSAGES
-
+# 向 MESSAGES 数组中添加键值对,其中键是消息的标识符,值是消息的内容
 MESSAGES=(
     [menu_title]="USBデバイスマネージャー"
     [menu_1]="新しいデバイスを検出"
