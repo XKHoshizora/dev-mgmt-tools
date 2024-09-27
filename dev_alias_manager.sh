@@ -304,11 +304,17 @@ detect_new_device() {
             # 获取设备信息
             # new_device_info=$(udevadm info -e | grep -Pzo '(?s)P: .*?\n\n' | grep -a 'SUBSYSTEM=="tty"' | tail -n 1)
             # new_device_info=$(udevadm info -e | tr -d '\000' | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
-            full_device_info=$(udevadm info -e | tr -d '\000')
-            echo "Debug: Full device info captured: $full_device_info"
+            new_device_info=$(udevadm info -e | tr -d '\000' | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
+            echo "Debug: Filtered device info before cleanup: $new_device_info"
 
-            new_device_info=$(echo "$full_device_info" | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
-            echo "Debug: Filtered device info captured: $new_device_info"
+            # 检查是否捕获到空设备信息
+            if [ -z "$new_device_info" ]; then
+                echo "ERROR: No device information captured, skipping..."
+                continue
+            fi
+
+            new_device_info=$(echo "$new_device_info" | sed 's/\x00//g')  # 进一步清理空字符
+            echo "Debug: Cleaned device info: $new_device_info"
 
             if [ -z "$new_device_info" ]; then
                 log "WARNING" "$(get_message "device_removed")"
