@@ -384,7 +384,7 @@ record_new_device() {
     if ! backup_udev_rules; then
         log "ERROR" "$(get_message "backup_failed")"
         return
-    }
+    fi
     if ! echo "SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"$idVendor\", ATTRS{idProduct}==\"$idProduct\", SYMLINK+=\"$alias_name\"" | sudo tee -a "$DEVICE_RECORD_FILE" > /dev/null; then
         log "ERROR" "$(get_message "write_error")"
         return
