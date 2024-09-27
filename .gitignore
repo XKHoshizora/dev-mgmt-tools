@@ -1,0 +1,28 @@
+# Ignore logs
+logs/
+
+# Ignore temporary files
+tmp/
+
+# Ignore user-specific configs
+config/dev_alias_manager.conf
+
+# Ignore system-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore backup files
+*.bak
+
+# Ignore Python bytecode
+*.pyc
+__pycache__/
+
+# Ignore node modules
+node_modules/
+
+# Ignore IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
