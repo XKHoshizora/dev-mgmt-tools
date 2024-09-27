@@ -390,27 +390,43 @@ record_new_device() {
     log "INFO" "$(get_message "recording_device")"
     local alias_name
 
-    # 循环直到用户输入有效的别名
+    # 限制 model 的长度，防止默认别名过长
+    # model=${model:0:32}
+
+    # 清空输入缓冲区，避免系统消息干扰用户输入
+    stty -icanon min 0 time 0; read -t 0; stty icanon
+
+    # 循环直到用户输入合法的别名
     while true; do
-        # 提示用户输入别名，增加调试信息
+        # 提示用户输入别名
         read -p "$(get_message "enter_alias") [$model]: " alias_name
         log "DEBUG" "User input alias: $alias_name"
+
+        # 如果用户未输入别名，询问是否使用 model 作为默认别名
+        if [ -z "$alias_name" ]; then
+            read -p "No alias entered. Do you want to use the model name [$model] as the alias? (y/n): " confirm
+            if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+                alias_name=$model
+            else
+                log "INFO" "Please enter a valid alias."
+                continue
+            fi
+        fi
         
-        # 默认使用设备 model 作为别名
-        alias_name=${alias_name:-$model}
-        
+        log "DEBUG" "Alias after default handling: $alias_name"
+
         # 验证别名是否合法
         if validate_alias "$alias_name"; then
             log "DEBUG" "Valid alias: $alias_name"
-            
-            # 检查是否与现有别名冲突
+
+            # 检查别名是否存在冲突
             if ! check_name_conflict "$alias_name"; then
                 break
             else
-                log "ERROR" "Alias conflict: $alias_name already in use"
+                log "ERROR" "Alias conflict: $alias_name already in use. Please choose another alias."
             fi
         else
-            log "ERROR" "Invalid alias entered: $alias_name"
+            log "ERROR" "Invalid alias entered: $alias_name. Please use only letters, numbers, underscores, and hyphens."
         fi
     done
 
