@@ -392,12 +392,25 @@ record_new_device() {
 
     # 循环直到用户输入有效的别名
     while true; do
+        # 提示用户输入别名，增加调试信息
         read -p "$(get_message "enter_alias") [$model]: " alias_name
+        log "DEBUG" "User input alias: $alias_name"
+        
+        # 默认使用设备 model 作为别名
         alias_name=${alias_name:-$model}
+        
+        # 验证别名是否合法
         if validate_alias "$alias_name"; then
+            log "DEBUG" "Valid alias: $alias_name"
+            
+            # 检查是否与现有别名冲突
             if ! check_name_conflict "$alias_name"; then
                 break
+            else
+                log "ERROR" "Alias conflict: $alias_name already in use"
             fi
+        else
+            log "ERROR" "Invalid alias entered: $alias_name"
         fi
     done
 
