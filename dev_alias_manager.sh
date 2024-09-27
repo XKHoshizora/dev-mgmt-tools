@@ -296,12 +296,15 @@ detect_new_device() {
             log "INFO" "$(get_message "waiting_device_settle")"
             if ! udevadm settle; then
                 log "ERROR" "$(get_message "udevadm_settle_failed")"
+                sleep 2  # 增加额外等待时间
                 rm -f "$TMP_DIR/device_processing.lock"  # 释放锁
                 continue  # 继续检测下一个设备
             fi
 
             # 获取设备信息
-            new_device_info=$(udevadm info -e | grep -Pzo '(?s)P: .*?\n\n' | grep -a 'SUBSYSTEM=="tty"' | tail -n 1)
+            # new_device_info=$(udevadm info -e | grep -Pzo '(?s)P: .*?\n\n' | grep -a 'SUBSYSTEM=="tty"' | tail -n 1)
+            new_device_info=$(udevadm info -e | tr -d '\000' | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
+            echo "Debug: Device info captured: $new_device_info"
             if [ -z "$new_device_info" ]; then
                 log "WARNING" "$(get_message "device_removed")"
                 rm -f "$TMP_DIR/device_processing.lock"  # 释放锁
