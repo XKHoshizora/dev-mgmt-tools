@@ -107,6 +107,7 @@ check_device_record_file() {
 
 # 初始化函数
 initialize() {
+    set_language  # 设置语言
     check_sudo  # 检查sudo权限
     
     # 检查 udevadm 是否存在
@@ -117,7 +118,6 @@ initialize() {
 
     create_directories_and_files  # 创建必要的目录和文件
     load_config  # 加载和验证配置
-    set_language  # 设置语言
     check_device_record_file  # 检查并创建 DEVICE_RECORD_FILE
     check_and_clean_lock  # 检查并清理锁文件
 }
@@ -137,9 +137,16 @@ check_and_clean_lock() {
 
 # 设置语言
 set_language() {
+    # 优先使用配置文件中的 LANGUAGE，如果为空则使用系统 LANG 变量
     if [ -z "$LANGUAGE" ]; then
-        LANGUAGE="${LANG%%_*}"
+        if [ -n "$LANG" ]; then
+            LANGUAGE="${LANG%%_*}"
+        else
+            LANGUAGE="en"  # 如果 LANG 也为空，默认使用英文
+        fi
     fi
+
+    # 基于 LANGUAGE 变量来选择语言文件
     case "$LANGUAGE" in
         zh|zh_CN|zh_TW) LANGUAGE="zh" ;;
         ja|ja_JP) LANGUAGE="ja" ;;
@@ -149,6 +156,7 @@ set_language() {
     # 加载语言文件
     local lang_file="$LANG_DIR/${LANGUAGE}.sh"
     if [ -f "$lang_file" ]; then
+        echo "Loading language file: $lang_file"  # 调试日志
         source "$lang_file"
     else
         echo "Warning: Language file not found. Using English as default."
