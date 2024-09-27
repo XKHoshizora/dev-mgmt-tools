@@ -393,9 +393,6 @@ record_new_device() {
     # 限制 model 的长度，防止默认别名过长
     # model=${model:0:32}
 
-    # 清空输入缓冲区，避免系统消息干扰用户输入
-    stty -icanon min 0 time 0; read -t 0; stty icanon
-
     # 循环直到用户输入合法的别名
     while true; do
         # 提示用户输入别名
