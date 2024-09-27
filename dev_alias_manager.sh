@@ -296,7 +296,7 @@ detect_new_device() {
             log "INFO" "$(get_message "waiting_device_settle")"
             if ! udevadm settle; then
                 log "ERROR" "$(get_message "udevadm_settle_failed")"
-                sleep 2  # 增加额外等待时间
+                sleep 3  # 延长等待时间
                 rm -f "$TMP_DIR/device_processing.lock"  # 释放锁
                 continue  # 继续检测下一个设备
             fi
@@ -305,16 +305,16 @@ detect_new_device() {
             # new_device_info=$(udevadm info -e | grep -Pzo '(?s)P: .*?\n\n' | grep -a 'SUBSYSTEM=="tty"' | tail -n 1)
             # new_device_info=$(udevadm info -e | tr -d '\000' | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
             new_device_info=$(udevadm info -e | tr -d '\000' | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
-            echo "Debug: Filtered device info before cleanup: $new_device_info"
+            log "DEBUG" "Filtered device info before cleanup: $new_device_info"
 
             # 检查是否捕获到空设备信息
             if [ -z "$new_device_info" ]; then
-                echo "ERROR: No device information captured, skipping..."
+                log "ERROR" "No device information captured, skipping..."
                 continue
             fi
 
             new_device_info=$(echo "$new_device_info" | sed 's/\x00//g')  # 进一步清理空字符
-            echo "Debug: Cleaned device info: $new_device_info"
+            log "DEBUG" "Cleaned device info: $new_device_info"
 
             if [ -z "$new_device_info" ]; then
                 log "WARNING" "$(get_message "device_removed")"
