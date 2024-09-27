@@ -1,6 +1,14 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
 
+# 检查必要的命令是否存在
+for cmd in udevadm lsusb; do
+    if ! command -v $cmd &> /dev/null; then
+        echo "Error: $cmd is required but not installed. Please install it and try again."
+        exit 1
+    fi
+done
+
 declare -A MESSAGES
 
 # 配置
@@ -109,16 +117,12 @@ check_device_record_file() {
 
 # 初始化函数
 initialize() {
-    # echo "Debug: Starting initialization"
     set_language  # 设置语言
-    # echo "Debug: Language set, MESSAGES array:"
-    # declare -p MESSAGES
-
     check_sudo  # 检查sudo权限
     
-    # 检查 udevadm 是否存在
-    if ! command -v udevadm &> /dev/null; then
-        echo "$(get_message "udevadm_missing")"
+    # 检查脚本是否有足够的权限
+    if [ ! -r "$DEVICE_RECORD_FILE" ] || [ ! -w "$DEVICE_RECORD_FILE" ]; then
+        log "ERROR" "Insufficient permissions to access $DEVICE_RECORD_FILE. Please run the script with sudo."
         exit 1
     fi
 
@@ -143,7 +147,6 @@ check_and_clean_lock() {
 
 # 设置语言
 set_language() {
-    # echo "Debug: Setting language, LANGUAGE=$LANGUAGE"
     # 优先使用配置文件中的 LANGUAGE，如果为空则使用系统 LANG 变量
     if [ -z "$LANGUAGE" ]; then
         if [ -n "$LANG" ]; then
@@ -170,15 +173,6 @@ set_language() {
         source "$LANG_DIR/en.sh"
     fi
 
-    # # debug 输出
-    # if [ -f "$lang_file" ]; then
-    #     echo "Debug: Loading language file: $lang_file"
-    #     source "$lang_file"
-    #     echo "Debug: MESSAGES array after loading:"
-    #     declare -p MESSAGES
-    # else
-    #     echo "Error: Language file not found: $lang_file"
-    # fi
 }
 
 # 获取本地化消息
@@ -199,7 +193,8 @@ log() {
     local level=$1
     local message=$2
 
-    if [[ "$LOG_LEVEL" == "DEBUG" ]] ||
+    if [[ "$DEBUG_MODE" == "true" ]] || 
+       [[ "$LOG_LEVEL" == "DEBUG" ]] ||
        [[ "$LOG_LEVEL" == "INFO" && "$level" != "DEBUG" ]] ||
        [[ "$LOG_LEVEL" == "WARNING" && "$level" =~ ^(WARNING|ERROR)$ ]] ||
        [[ "$LOG_LEVEL" == "ERROR" && "$level" == "ERROR" ]]; then
@@ -281,34 +276,22 @@ detect_new_device() {
     timeout "$TIMEOUT" udevadm monitor --kernel --subsystem-match=usb | while read -r line; do
         if [[ $line == *"add"* ]]; then
             log "INFO" "$(get_message "new_device_detected")"
+            log "DEBUG" "Raw udevadm output: $line"
 
             # 从 udevadm monitor 输出中获取设备路径
             device_path=$(echo "$line" | awk '{print $NF}')
+            log "DEBUG" "Detected device path: $device_path"
             
-            # 检查是否已锁定，确保每次只能处理一个设备
-            if [ -f "$TMP_DIR/device_processing.lock" ]; then
-                log "INFO" "$(get_message "device_processing_busy")"
-                continue  # 如果已经有设备在处理，跳过该设备
-            fi
-
-            # 创建临时锁文件，防止并发设备处理
-            touch "$TMP_DIR/device_processing.lock"
-
             # 等待设备树稳定，确保所有设备准备就绪
             log "INFO" "$(get_message "waiting_device_settle")"
-            if ! udevadm settle; then
+            sleep 2  # 添加短暂延迟
+            if ! udevadm settle --timeout=10; then
                 log "ERROR" "$(get_message "udevadm_settle_failed")"
-                sleep 3  # 延长等待时间
-                rm -f "$TMP_DIR/device_processing.lock"  # 释放锁
-                continue  # 继续检测下一个设备
+                continue
             fi
 
             # 获取设备信息
             get_device_info "$device_path"
-
-            # 处理完该设备后，继续检测下一个设备，释放锁
-            rm -f "$TMP_DIR/device_processing.lock"
-            log "INFO" "$(get_message "device_processed") $device_path"
         fi
     done
 
@@ -318,7 +301,29 @@ detect_new_device() {
 # 获取设备信息的函数
 get_device_info() {
     local device_path=$1
-    local device_info=$(udevadm info --query=all --name="$device_path")
+    log "DEBUG" "Getting info for device: $device_path"
+
+    # 使用 udevadm info 获取设备信息
+    local device_info=$(udevadm info --query=all --name="$device_path" 2>/dev/null)
+    
+    if [ -z "$device_info" ]; then
+        log "WARNING" "Unable to get device info using udevadm. Trying lsusb..."
+        # 尝试使用 lsusb 获取设备信息
+        local lsusb_info=$(lsusb | grep -i "$(basename "$device_path")")
+        if [ -n "$lsusb_info" ]; then
+            local idVendor=$(echo "$lsusb_info" | awk '{print $6}' | cut -d: -f1)
+            local idProduct=$(echo "$lsusb_info" | awk '{print $6}' | cut -d: -f2)
+            log "INFO" "Device Information from lsusb:"
+            log "INFO" "Vendor ID: $idVendor"
+            log "INFO" "Product ID: $idProduct"
+            record_new_device "$idVendor" "$idProduct" "" "" "$device_path"
+            return
+        else
+            log "ERROR" "Failed to get device information using both udevadm and lsusb"
+            return
+        fi
+    fi
+
     log "DEBUG" "Full device info: $device_info"
 
     # 提取通用设备信息
@@ -332,13 +337,6 @@ get_device_info() {
     # 如果没有找到 serial，尝试其他可能的属性
     if [ -z "$serial" ]; then
         serial=$(echo "$device_info" | grep -E 'ID_SERIAL=|ID_SERIAL_SHORT=' | cut -d'=' -f2 | head -n1)
-    fi
-
-    # 如果还是没有找到必要的信息，尝试使用 udevadm info -a 命令
-    if [ -z "$idVendor" ] || [ -z "$idProduct" ]; then
-        local detailed_info=$(udevadm info -a -n "$device_path")
-        idVendor=$(echo "$detailed_info" | grep -m1 'idVendor' | awk -F '"' '{print $2}')
-        idProduct=$(echo "$detailed_info" | grep -m1 'idProduct' | awk -F '"' '{print $2}')
     fi
 
     log "INFO" "Device Information:"

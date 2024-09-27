@@ -92,3 +92,6 @@ GUESS_DEVICE_TYPE=false
 # Path to the device type database file
 # 设备类型数据库文件的路径
 DEVICE_TYPE_DB="/usr/local/share/dev_alias_manager/device_types.db"
+
+# 调试模式选项
+DEBUG_MODE=false
