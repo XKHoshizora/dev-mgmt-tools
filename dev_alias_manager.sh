@@ -303,8 +303,13 @@ detect_new_device() {
 
             # 获取设备信息
             # new_device_info=$(udevadm info -e | grep -Pzo '(?s)P: .*?\n\n' | grep -a 'SUBSYSTEM=="tty"' | tail -n 1)
-            new_device_info=$(udevadm info -e | tr -d '\000' | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
-            echo "Debug: Device info captured: $new_device_info"
+            # new_device_info=$(udevadm info -e | tr -d '\000' | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
+            full_device_info=$(udevadm info -e | tr -d '\000')
+            echo "Debug: Full device info captured: $full_device_info"
+
+            new_device_info=$(echo "$full_device_info" | grep -Pzo '(?s)P: .*?\n\n' | tail -n 1)
+            echo "Debug: Filtered device info captured: $new_device_info"
+
             if [ -z "$new_device_info" ]; then
                 log "WARNING" "$(get_message "device_removed")"
                 rm -f "$TMP_DIR/device_processing.lock"  # 释放锁
