@@ -137,6 +137,7 @@ check_and_clean_lock() {
 
 # 设置语言
 set_language() {
+    echo "Debug: Setting language, LANGUAGE=$LANGUAGE"
     # 优先使用配置文件中的 LANGUAGE，如果为空则使用系统 LANG 变量
     if [ -z "$LANGUAGE" ]; then
         if [ -n "$LANG" ]; then
@@ -162,12 +163,16 @@ set_language() {
         echo "Warning: Language file not found. Using English as default."
         source "$LANG_DIR/en.sh"
     fi
+    echo "Debug: Language file loaded: $lang_file"
 }
 
 # 获取本地化消息
 get_message() {
     local key="$1"
     local message="${MESSAGES[$key]}"
+
+    echo "Debug: Getting message for key '$key', result: '$message'"
+    
     if [ -z "$message" ]; then
         message="$key"  # 如果没有找到翻译，使用键名作为消息
     fi
