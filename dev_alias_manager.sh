@@ -1,6 +1,8 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
 
+declare -A MESSAGES
+
 # 配置
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 CONFIG_DIR="$SCRIPT_DIR/config"
@@ -107,7 +109,11 @@ check_device_record_file() {
 
 # 初始化函数
 initialize() {
+    echo "Debug: Starting initialization"
     set_language  # 设置语言
+    echo "Debug: Language set, MESSAGES array:"
+    declare -p MESSAGES
+    
     check_sudo  # 检查sudo权限
     
     # 检查 udevadm 是否存在
@@ -163,15 +169,24 @@ set_language() {
         echo "Warning: Language file not found. Using English as default."
         source "$LANG_DIR/en.sh"
     fi
-    echo "Debug: Language file loaded: $lang_file"
+
+    # debug 输出
+    if [ -f "$lang_file" ]; then
+        echo "Debug: Loading language file: $lang_file"
+        source "$lang_file"
+        echo "Debug: MESSAGES array after loading:"
+        declare -p MESSAGES
+    else
+        echo "Error: Language file not found: $lang_file"
+    fi
 }
 
 # 获取本地化消息
 get_message() {
     local key="$1"
+    echo "Debug: Getting message for key '$key'"
     local message="${MESSAGES[$key]}"
-
-    echo "Debug: Getting message for key '$key', result: '$message'"
+    echo "Debug: Retrieved message: '$message'"
     
     if [ -z "$message" ]; then
         message="$key"  # 如果没有找到翻译，使用键名作为消息
