@@ -278,7 +278,7 @@ validate_alias() {
 detect_new_device() {
     log "INFO" "$(get_message "waiting_device")"
 
-    udevadm monitor --kernel --subsystem-match=usb | while read -r line; do
+    timeout "$TIMEOUT" udevadm monitor --kernel --subsystem-match=usb | while read -r line; do
         if [[ $line == *"add"* ]]; then
             log "INFO" "$(get_message "new_device_detected")"
 
@@ -390,20 +390,18 @@ record_new_device() {
     log "INFO" "$(get_message "recording_device")"
     local alias_name
 
-    if [ "$AUTO_NAMING" = true ]; then
-        alias_name="${AUTO_NAME_PREFIX}${idVendor}_${idProduct}"
-    else
-        while true; do
-            read -p "$(get_message "enter_alias") [$model]: " alias_name
-            alias_name=${alias_name:-$model}
-            if validate_alias "$alias_name"; then
-                if ! check_name_conflict "$alias_name"; then
-                    break
-                fi
+    # 循环直到用户输入有效的别名
+    while true; do
+        read -p "$(get_message "enter_alias") [$model]: " alias_name
+        alias_name=${alias_name:-$model}
+        if validate_alias "$alias_name"; then
+            if ! check_name_conflict "$alias_name"; then
+                break
             fi
-        done
-    fi
+        fi
+    done
 
+    # 继续后续的别名处理逻辑
     check_root
     if ! backup_udev_rules; then
         log "ERROR" "$(get_message "backup_failed")"
@@ -425,7 +423,7 @@ record_new_device() {
         return
     fi
     log "INFO" "$(get_message "device_alias_applied") /dev/$alias_name"
-    
+
     wait_for_symlink "$alias_name" "$devname"
 }
 
