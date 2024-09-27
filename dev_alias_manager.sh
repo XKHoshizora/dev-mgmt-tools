@@ -391,17 +391,17 @@ record_new_device() {
     local alias_name
 
     # 限制 model 的长度，防止默认别名过长
-    # model=${model:0:32}
+    model=${model:0:32}
 
     # 循环直到用户输入合法的别名
     while true; do
-        # 提示用户输入别名
-        read -p "$(get_message "enter_alias") [$model]: " alias_name
+        # 提示用户输入别名，并强制从终端读取
+        read -p "$(get_message "enter_alias") [$model]: " alias_name </dev/tty
         log "DEBUG" "User input alias: $alias_name"
 
         # 如果用户未输入别名，询问是否使用 model 作为默认别名
         if [ -z "$alias_name" ]; then
-            read -p "No alias entered. Do you want to use the model name [$model] as the alias? (y/n): " confirm
+            read -p "No alias entered. Do you want to use the model name [$model] as the alias? (y/n): " confirm </dev/tty
             if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
                 alias_name=$model
             else
