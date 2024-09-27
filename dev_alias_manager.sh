@@ -278,35 +278,36 @@ validate_alias() {
 detect_new_device() {
     log "INFO" "$(get_message "waiting_device")"
 
-    timeout "$TIMEOUT" udevadm monitor --kernel --subsystem-match=usb | while read -r line; do
+    udevadm monitor --kernel --subsystem-match=usb | while read -r line; do
         if [[ $line == *"add"* ]]; then
             log "INFO" "$(get_message "new_device_detected")"
 
-            # 从 udevadm monitor 输出中获取设备路径
-            device_path=$(echo "$line" | awk '{print $NF}')
+            # 从 udevadm monitor 输出中获取设备节点路径
+            # 增加调试日志，确保设备路径被正确提取
+            device_path=$(udevadm info --query=path --name=/dev/ttyUSB0 2>/dev/null)
+            log "DEBUG" "Detected device at path: $device_path"
             
-            # 检查是否已锁定，确保每次只能处理一个设备
-            if [ -f "$TMP_DIR/device_processing.lock" ]; then
-                log "INFO" "$(get_message "device_processing_busy")"
-                continue  # 如果已经有设备在处理，跳过该设备
+            # 如果找不到设备路径，记录警告日志并跳过此设备
+            if [ -z "$device_path" ]; then
+                log "WARNING" "$(get_message "device_path_not_found")"
+                continue
             fi
 
             # 创建临时锁文件，防止并发设备处理
             touch "$TMP_DIR/device_processing.lock"
 
-            # 等待设备树稳定，确保所有设备准备就绪
             log "INFO" "$(get_message "waiting_device_settle")"
             if ! udevadm settle; then
                 log "ERROR" "$(get_message "udevadm_settle_failed")"
-                sleep 3  # 延长等待时间
-                rm -f "$TMP_DIR/device_processing.lock"  # 释放锁
-                continue  # 继续检测下一个设备
+                sleep 3
+                rm -f "$TMP_DIR/device_processing.lock"
+                continue
             fi
 
-            # 获取设备信息
+            # 获取设备信息并处理
             get_device_info "$device_path"
 
-            # 处理完该设备后，继续检测下一个设备，释放锁
+            # 处理完该设备后，释放锁
             rm -f "$TMP_DIR/device_processing.lock"
             log "INFO" "$(get_message "device_processed") $device_path"
         fi
@@ -318,11 +319,13 @@ detect_new_device() {
 # 获取设备信息的函数
 get_device_info() {
     local device_path=$1
-    local device_info=$(udevadm info --query=all --name="$device_path")
+    local device_info=$(udevadm info --query=all --path="$device_path")
     log "DEBUG" "Full device info: $device_info"
 
-    # 提取通用设备信息
+    # 提取通用设备信息，增加调试日志
     local devname=$(echo "$device_info" | grep 'DEVNAME=' | cut -d'=' -f2)
+    log "DEBUG" "Device node: $devname"
+    
     local subsystem=$(echo "$device_info" | grep 'SUBSYSTEM=' | cut -d'=' -f2)
     local idVendor=$(echo "$device_info" | grep 'ID_VENDOR_ID=' | cut -d'=' -f2)
     local idProduct=$(echo "$device_info" | grep 'ID_MODEL_ID=' | cut -d'=' -f2)
@@ -334,7 +337,7 @@ get_device_info() {
         serial=$(echo "$device_info" | grep -E 'ID_SERIAL=|ID_SERIAL_SHORT=' | cut -d'=' -f2 | head -n1)
     fi
 
-    # 如果还是没有找到必要的信息，尝试使用 udevadm info -a 命令
+    # 如果没有找到必要的信息，使用更详细的 udevadm info
     if [ -z "$idVendor" ] || [ -z "$idProduct" ]; then
         local detailed_info=$(udevadm info -a -n "$device_path")
         idVendor=$(echo "$detailed_info" | grep -m1 'idVendor' | awk -F '"' '{print $2}')
@@ -349,7 +352,6 @@ get_device_info() {
     log "INFO" "Serial: $serial"
     log "INFO" "Model: $model"
 
-    # 根据设备信息决定是否需要创建别名
     if [ -n "$idVendor" ] && [ -n "$idProduct" ]; then
         if grep -q "$idVendor.*$idProduct" "$DEVICE_RECORD_FILE"; then
             log "INFO" "$(get_message "device_recorded")"
