@@ -6,7 +6,7 @@ Dev Alias Manager is a Bash script tool for managing USB device aliases. It allo
 
 ## Features
 
-- Listen for new USB device connections
+- Listen for new (USB) device connections
 - Assign aliases to new devices
 - View list of recorded devices
 - Display detailed device information
@@ -41,7 +41,7 @@ Run the script:
 sudo ./dev_alias_manager.sh
 ```
 
-Note: Some operations (such as modifying udev rules) require root privileges, so it's recommended to run the script with sudo.
+Note: Some operations (such as modifying udev rules) require  `root`  privileges, so it's recommended to run the script with `sudo`.
 
 Follow the on-screen prompts to select an operation:
 
