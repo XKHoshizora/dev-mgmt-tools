@@ -1,4 +1,5 @@
 #!/bin/bash
+# -*- coding: utf-8 -*-
 
 # 配置
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -106,7 +107,6 @@ check_device_record_file() {
 
 # 初始化函数
 initialize() {
-    set_language  # 设置语言
     check_sudo  # 检查sudo权限
     
     # 检查 udevadm 是否存在
@@ -117,6 +117,7 @@ initialize() {
 
     create_directories_and_files  # 创建必要的目录和文件
     load_config  # 加载和验证配置
+    set_language  # 设置语言
     check_device_record_file  # 检查并创建 DEVICE_RECORD_FILE
     check_and_clean_lock  # 检查并清理锁文件
 }
