@@ -21,15 +21,15 @@ Dev Alias Manager is a Bash script tool for managing USB device aliases. It allo
 ## Installation
 
 1. Clone the repository:
-   ```
+   ```bash
    git clone https://github.com/XKHoshizora/dev-mgmt-tools.git
    ```
 2. Enter the project directory:
-   ```
+   ```bash
    cd dev-mgmt-tools
    ```
 3. Ensure the script has execution permissions:
-   ```
+   ```bash
    chmod +x dev_alias_manager.sh
    ```
 
@@ -37,11 +37,11 @@ Dev Alias Manager is a Bash script tool for managing USB device aliases. It allo
 
 Run the script:
 
-```
+```bash
 sudo ./dev_alias_manager.sh
 ```
 
-Note: Some operations (such as modifying udev rules) require  `root`  privileges, so it's recommended to run the script with `sudo`.
+Note: Some operations (such as modifying udev rules) require `root` privileges, so it's recommended to run the script with `sudo`.
 
 Follow the on-screen prompts to select an operation:
 
