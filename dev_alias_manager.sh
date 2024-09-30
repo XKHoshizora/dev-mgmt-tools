@@ -13,8 +13,9 @@ LANG_DIR="./lang"
 DEFAULT_CONFIG_FILE="${CONFIG_DIR}/dev_alias_manager.conf.default"
 LOG_FILE="${LOG_DIR}/usb_alias_manager.log"
 
-# 默认的初始加载消息，不依赖语言文件
+# 默认的初始加载消息
 DEFAULT_LOADING_CONFIG="Loading config..."
+DEFAULT_CONFIG_NOT_FOUND="Configuration file not found. Exiting."
 DEFAULT_ATTEMPTING_LOAD_LANG="Attempting to load language file..."
 DEFAULT_LANGUAGE_NOT_FOUND="Language file not found, defaulting to English."
 
@@ -55,7 +56,7 @@ function check_sudo() {
 # 使用 udevadm 获取设备信息
 function get_device_info() {
     local device="$1"
-    udevadm info --query=all --name="${device}" | grep -E 'ID_VENDOR_ID|ID_MODEL|ID_SERIAL|ID_PRODUCT'
+    udevadm info --query=all --name="${device}" | grep -E 'ID_VENDOR_ID|ID_MODEL_ID|ID_SERIAL_SHORT|ID_PRODUCT'
 }
 
 # 检查设备是否已记录
@@ -88,6 +89,16 @@ function validate_alias() {
     return 0
 }
 
+# 设置设备权限
+function set_device_permissions() {
+    local permission="$1"
+    if [[ ! "${permission}" =~ ^[0-7]{3}$ ]]; then
+        echo "${INVALID_PERMISSION}"
+        return 1
+    fi
+    return 0
+}
+
 # 管理别名
 function manage_alias() {
     echo -e "${WAITING_NEW_DEVICE}\n"
@@ -110,7 +121,7 @@ function manage_alias() {
 
         # 检查是否有新设备
         if [ -n "$new_devices" ]; then
-            echo -e "${NEW_DEVICE_DETECTED}\n"
+            echo "${NEW_DEVICE_DETECTED}"
             echo "$new_devices"
             break  # 跳出循环，进入操作流程
         fi
@@ -128,58 +139,72 @@ function manage_alias() {
     fi
 
     # 使用 udevadm 获取设备信息
-    local info=$(udevadm info --query=all --name="${device}" | grep -E 'ID_VENDOR_ID|ID_MODEL|ID_SERIAL|ID_PRODUCT|ID_SERIAL_SHORT')
+    local info=$(get_device_info "$device")
+    local idVendor=$(echo "$info" | grep 'ID_VENDOR_ID=' | cut -d '=' -f2)
+    local idProduct=$(echo "$info" | grep 'ID_MODEL_ID=' | cut -d '=' -f2)
+    local idSerial=$(echo "$info" | grep 'ID_SERIAL_SHORT=' | cut -d '=' -f2)
 
-    # 提取设备的唯一标识符（如序列号）
-    local serial_number=$(echo "$info" | grep 'ID_SERIAL_SHORT=' | cut -d '=' -f2)
+    if [ -z "$idVendor" ] || [ -z "$idProduct" ] || [ -z "$idSerial" ]; then
+        echo "${DEVICE_INFO_FAILED}"
+        return
+    fi
 
     # 检查设备是否已记录
-    if device_exists "$serial_number"; then
+    if device_exists "$idSerial"; then
         echo -e "${DEVICE_ALREADY_RECORDED}\n"
         return
     fi
 
     # 显示操作菜单并允许多次操作直到用户选择退出
     while true; do
-        # 显示可执行操作的菜单
-        echo -e "\n${OPERATION_PROMPT}\n"
+        echo -e "\n${OPERATION_PROMPT}"
         echo "1) ${OPERATION_SET_ALIAS}"
         echo "2) ${OPERATION_SHOW_INFO}"
         echo "3) ${OPERATION_EXIT}"
         read -p "${OPERATION_CHOICE}" operation
 
-        # 根据用户选择执行相应操作
         case $operation in
-            1)  # 设置别名
+            1)
+                # 设置别名
                 while true; do
-                    echo -e "\n${DEVICE_PROMPT}"
+                    echo "${DEVICE_PROMPT}"
                     read -p "> " alias
 
                     # 验证别名是否合法
-                    if validate_alias "${alias}"; then
-                        if alias_exists "${alias}"; then
-                            echo -e "${ALIAS_EXISTS}"
+                    if validate_alias "$alias"; then
+                        if alias_exists "$alias"; then
+                            echo "${ALIAS_EXISTS}"
                         else
-                            echo "${ALIAS_VALID} ${alias}"
-                            # 将新规则追加到文件中
-                            echo "SUBSYSTEM==\"usb\", ATTR{idVendor}==\"$(echo "${info}" | grep ID_VENDOR_ID | cut -d'=' -f2)\", ATTR{idSerial}==\"$serial_number\", SYMLINK+=\"${alias}\"" >> /etc/udev/rules.d/99-usb-alias.rules
-                            log "INFO" "${ALIAS_CREATED} ${alias}."
-                            break
+                            echo "${ALIAS_VALID} $alias"
+
+                            # 提示用户输入权限
+                            while true; do
+                                read -p "${ENTER_PERMISSION}" permission
+                                if set_device_permissions "$permission"; then
+                                    # 将新规则写入文件
+                                    new_rule="KERNEL==\"ttyUSB*\", SUBSYSTEM==\"usb\", ATTR{idVendor}==\"$idVendor\", ATTR{idProduct}==\"$idProduct\", ATTR{idSerial}==\"$idSerial\", MODE:=\"$permission\", SYMLINK+=\"$alias\""
+                                    echo "$new_rule" >> /etc/udev/rules.d/99-usb-alias.rules
+                                    echo "${DEVICE_RECORDED} $alias ${AND_PERMISSION} $permission"
+                                    break 2
+                                fi
+                            done
                         fi
                     else
                         echo "${INVALID_ALIAS}"
                     fi
                 done
                 ;;
-            2)  # 显示设备详细信息
+            2)
+                # 显示设备详细信息
                 echo -e "\n${DEVICE_INFO}\n"
                 echo "$info" | sed 's/E: //g'  # 去掉 "E: " 前缀
                 ;;
-            3)  # 退出
+            3)
+                # 退出
                 echo -e "${EXITING}\n"
                 break
                 ;;
-            *)  # 无效输入
+            *)
                 echo -e "${INVALID_OPTION}\n"
                 ;;
         esac
@@ -195,8 +220,12 @@ function view_recorded_devices() {
         while IFS= read -r line; do
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTR\{idVendor\}=="\K[^"]+')
-            subsystem=$(echo "$line" | grep -oP 'SUBSYSTEM=="\K[^"]+')
-            echo "$i. $alias: $subsystem, ATTR{idVendor}==$idVendor"
+            idProduct=$(echo "$line" | grep -oP 'ATTR\{idProduct\}=="\K[^"]+')
+            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
+            kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
+            idSerial=$(echo "$line" | grep -oP 'ATTR{idSerial}=="\K[^"]+')
+            device_map[$i]="$line"
+            echo "$i. $alias: $kernel, $mode, $idVendor, $idProduct, $idSerial"
             ((i++))
         done < /etc/udev/rules.d/99-usb-alias.rules
     else
@@ -222,9 +251,12 @@ function delete_device_record() {
         while IFS= read -r line; do
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTR\{idVendor\}=="\K[^"]+')
-            subsystem=$(echo "$line" | grep -oP 'SUBSYSTEM=="\K[^"]+')
+            idProduct=$(echo "$line" | grep -oP 'ATTR\{idProduct\}=="\K[^"]+')
+            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
+            kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
+            idSerial=$(echo "$line" | grep -oP 'ATTR{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
-            echo "$i. $alias: $subsystem, ATTR{idVendor}==$idVendor"
+            echo "$i. $alias: $kernel, $mode, $idVendor, $idProduct, $idSerial"
             ((i++))
         done < /etc/udev/rules.d/99-usb-alias.rules
 
@@ -234,7 +266,8 @@ function delete_device_record() {
 
         if [[ -n "${device_map[$device_number]}" ]]; then
             # 删除选中的设备记录
-            sed -i "/${device_map[$device_number]}/d" /etc/udev/rules.d/99-usb-alias.rules
+            line_to_delete=$(printf '%s\n' "${device_map[$device_number]}" | sed 's/[]\/$*.^[]/\\&/g')
+            sed -i "/${line_to_delete}/d" /etc/udev/rules.d/99-usb-alias.rules
             echo "${DEVICE_RECORD_DELETED}"
         else
             echo "${INVALID_SELECTION}"
@@ -248,19 +281,23 @@ function delete_device_record() {
 # 重命名设备别名
 function rename_device_alias() {
     echo -e "\n${RENAMING_DEVICE_ALIAS}"
-    if [ -f "/etc/udev/rules.d/99-usb-alias.rules" ] && [ -s "/etc/udev/rules.d/99-usb-alias.rules" ]; then
+    local rules_file="/etc/udev/rules.d/99-usb-alias.rules"
+    local temp_file=$(mktemp)
+    if [ -f "$rules_file" ] && [ -s "$rules_file" ]; then
         i=1
         declare -A device_map
         while IFS= read -r line; do
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTR\{idVendor\}=="\K[^"]+')
-            subsystem=$(echo "$line" | grep -oP 'SUBSYSTEM=="\K[^"]+')
+            idProduct=$(echo "$line" | grep -oP 'ATTR\{idProduct\}=="\K[^"]+')
+            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
+            kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
+            idSerial=$(echo "$line" | grep -oP 'ATTR{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
-            echo "$i. $alias: $subsystem, ATTR{idVendor}==$idVendor"
+            echo "$i. $alias: $kernel, $mode, $idVendor, $idProduct, $idSerial"
             ((i++))
-        done < /etc/udev/rules.d/99-usb-alias.rules
+        done < "$rules_file"
 
-        # 提示用户选择要重命名的设备
         echo
         read -p "${RENAME_DEVICE_PROMPT}" device_number
 
@@ -270,12 +307,30 @@ function rename_device_alias() {
             while true; do
                 echo
                 read -p "${NEW_ALIAS_PROMPT}" new_alias
-                if alias_exists "${new_alias}"; then
-                    echo -e "${ALIAS_EXISTS}"
+                if [[ "$new_alias" != "$current_alias" ]] && alias_exists "${new_alias}"; then
+                    echo "${ALIAS_EXISTS}"
                 else
                     # 更新设备别名
-                    sed -i "s/SYMLINK+=\"$current_alias\"/SYMLINK+=\"$new_alias\"/" /etc/udev/rules.d/99-usb-alias.rules
-                    echo "${ALIAS_UPDATED}"
+                    local updated=false
+                    while IFS= read -r line; do
+                        if [[ "$line" == "${device_map[$device_number]}" ]]; then
+                            echo "${line/SYMLINK+=\"$current_alias\"/SYMLINK+=\"$new_alias\"}" >> "$temp_file"
+                            updated=true
+                        else
+                            echo "$line" >> "$temp_file"
+                        fi
+                    done < "$rules_file"
+
+                    if $updated; then
+                        if sudo mv "$temp_file" "$rules_file"; then
+                            echo "${ALIAS_UPDATED}"
+                            break
+                        else
+                            echo "${ALIAS_UPDATE_FAILED}"
+                        fi
+                    else
+                        echo "${DEVICE_NOT_FOUND}"
+                    fi
                     break
                 fi
             done
@@ -285,6 +340,71 @@ function rename_device_alias() {
     else
         echo "${NO_RECORDED_DEVICES}"
     fi
+    rm -f "$temp_file"
+    echo
+}
+
+# 更新设备权限的函数
+function update_device_permissions() {
+    echo -e "\n${CHOOSE_DEVICE_TO_UPDATE_PERMISSION}"
+    local rules_file="/etc/udev/rules.d/99-usb-alias.rules"
+    local temp_file=$(mktemp)
+    if [ -f "$rules_file" ] && [ -s "$rules_file" ]; then
+        i=1
+        declare -A device_map
+        while IFS= read -r line; do
+            alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
+            idVendor=$(echo "$line" | grep -oP 'ATTR\{idVendor\}=="\K[^"]+')
+            idProduct=$(echo "$line" | grep -oP 'ATTR\{idProduct\}=="\K[^"]+')
+            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
+            kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
+            idSerial=$(echo "$line" | grep -oP 'ATTR{idSerial}=="\K[^"]+')
+            device_map[$i]="$line"
+            echo "$i. $alias: $kernel, $mode, $idVendor, $idProduct, $idSerial"
+            ((i++))
+        done < "$rules_file"
+        
+        echo
+        read -p "${ENTER_DEVICE_NUMBER}" device_number
+        
+        if [[ -n "${device_map[$device_number]}" ]]; then
+            current_mode=$(echo "${device_map[$device_number]}" | grep -oP 'MODE:="\K[0-7]{3}')
+            echo -e "\n${CURRENT_PERMISSION} $current_mode"
+            while true; do
+                read -p "${ENTER_NEW_PERMISSION}" new_permission
+                if set_device_permissions "$new_permission"; then
+                    local updated=false
+                    while IFS= read -r line; do
+                        if [[ "$line" == "${device_map[$device_number]}" ]]; then
+                            echo "${line/MODE:=\"$current_mode\"/MODE:=\"$new_permission\"}" >> "$temp_file"
+                            updated=true
+                        else
+                            echo "$line" >> "$temp_file"
+                        fi
+                    done < "$rules_file"
+
+                    if $updated; then
+                        if sudo mv "$temp_file" "$rules_file"; then
+                            echo "Device permissions updated successfully."
+                            break
+                        else
+                            echo "${PERMISSION_UPDATE_FAILED}"
+                        fi
+                    else
+                        echo "${DEVICE_NOT_FOUND}"
+                    fi
+                    break
+                else
+                    echo "${INVALID_PERMISSION}"
+                fi
+            done
+        else
+            echo "${INVALID_SELECTION}"
+        fi
+    else
+        echo "${NO_DEVICE_TO_UPDATE_PERMISSION}"
+    fi
+    rm -f "$temp_file"
     echo
 }
 
@@ -297,7 +417,7 @@ function load_config() {
         source "${TMP_DIR}/config.temp"
         echo "Loaded config: LANGUAGE=${LANGUAGE}"
     else
-        echo "Configuration file not found. Exiting."
+        echo "${DEFAULT_CONFIG_NOT_FOUND}"
         exit 1
     fi
 }
@@ -336,15 +456,17 @@ function main_menu() {
         echo "4) ${MENU_OPTION_4}"
         echo "5) ${MENU_OPTION_5}"
         echo "6) ${MENU_OPTION_6}"
+        echo "7) ${MENU_OPTION_7}"
         read -p "${CHOOSE_OPTION}" option
 
         case $option in
-            1) manage_alias ;;  # 调用管理别名功能
+            1) manage_alias ;;  # 调用管理别名功能退出程序
             2) view_recorded_devices ;;  # 调用查看已记录的设备功能
             3) show_all_devices ;;  # 显示所有 USB 设备
             4) delete_device_record ;;  # 调用删除设备记录功能
-            5) rename_device_alias ;;  # 调用重命名设备别名功能
-            6) cleanup ;;  # 退出程序并清理
+            5) rename_device_alias ;;  # 更新设备别名
+            6) update_device_permissions ;;  # 更新设备权限
+            7) cleanup ;;  # 退出程序并清理
             *) echo -e "${INVALID_OPTION}\n" ;;  # 无效选项提示
         esac
     done
