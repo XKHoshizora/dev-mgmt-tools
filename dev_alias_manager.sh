@@ -92,7 +92,7 @@ function validate_alias() {
 # 设置设备权限
 function set_device_permissions() {
     local permission="$1"
-    if [[ ! "${permission}" =~ ^[0-7]{3}$ ]]; then
+    if [[ ! "${permission}" =~ ^[0-7]{4}$ ]]; then
         echo "${INVALID_PERMISSION}"
         return 1
     fi
