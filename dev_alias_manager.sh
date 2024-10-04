@@ -62,7 +62,7 @@ function get_device_info() {
 # 检查设备是否已记录
 function device_exists() {
     local serial_to_check="$1"
-    if grep -q "ATTR{idSerial}==\"$serial_to_check\"" /etc/udev/rules.d/99-usb-alias.rules 2>/dev/null; then
+    if grep -q "ATTRS{idSerial}==\"$serial_to_check\"" /etc/udev/rules.d/99-usb-alias.rules 2>/dev/null; then
         return 0  # 设备已存在
     else
         return 1  # 设备不存在
@@ -182,7 +182,7 @@ function manage_alias() {
                                 read -p "${ENTER_PERMISSION}" permission
                                 if set_device_permissions "$permission"; then
                                     # 将新规则写入文件
-                                    new_rule="KERNEL==\"ttyUSB*\", SUBSYSTEM==\"usb\", ATTR{idVendor}==\"$idVendor\", ATTR{idProduct}==\"$idProduct\", ATTR{idSerial}==\"$idSerial\", MODE:=\"$permission\", SYMLINK+=\"$alias\""
+                                    new_rule="KERNEL==\"ttyUSB*\", SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"$idVendor\", ATTRS{idProduct}==\"$idProduct\", ATTRS{idSerial}==\"$idSerial\", MODE:=\"$permission\", SYMLINK+=\"$alias\""
                                     echo "$new_rule" >> /etc/udev/rules.d/99-usb-alias.rules
                                     echo "${DEVICE_RECORDED} $alias ${AND_PERMISSION} $permission"
                                     break 2
@@ -219,11 +219,11 @@ function view_recorded_devices() {
         i=1
         while IFS= read -r line; do
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
-            idVendor=$(echo "$line" | grep -oP 'ATTR\{idVendor\}=="\K[^"]+')
-            idProduct=$(echo "$line" | grep -oP 'ATTR\{idProduct\}=="\K[^"]+')
+            idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
+            idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
             mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
-            idSerial=$(echo "$line" | grep -oP 'ATTR{idSerial}=="\K[^"]+')
+            idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
             echo "$i. $alias: $kernel, $mode, $idVendor, $idProduct, $idSerial"
             ((i++))
@@ -250,11 +250,11 @@ function delete_device_record() {
         declare -A device_map
         while IFS= read -r line; do
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
-            idVendor=$(echo "$line" | grep -oP 'ATTR\{idVendor\}=="\K[^"]+')
-            idProduct=$(echo "$line" | grep -oP 'ATTR\{idProduct\}=="\K[^"]+')
+            idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
+            idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
             mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
-            idSerial=$(echo "$line" | grep -oP 'ATTR{idSerial}=="\K[^"]+')
+            idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
             echo "$i. $alias: $kernel, $mode, $idVendor, $idProduct, $idSerial"
             ((i++))
@@ -288,11 +288,11 @@ function rename_device_alias() {
         declare -A device_map
         while IFS= read -r line; do
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
-            idVendor=$(echo "$line" | grep -oP 'ATTR\{idVendor\}=="\K[^"]+')
-            idProduct=$(echo "$line" | grep -oP 'ATTR\{idProduct\}=="\K[^"]+')
+            idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
+            idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
             mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
-            idSerial=$(echo "$line" | grep -oP 'ATTR{idSerial}=="\K[^"]+')
+            idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
             echo "$i. $alias: $kernel, $mode, $idVendor, $idProduct, $idSerial"
             ((i++))
@@ -354,11 +354,11 @@ function update_device_permissions() {
         declare -A device_map
         while IFS= read -r line; do
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
-            idVendor=$(echo "$line" | grep -oP 'ATTR\{idVendor\}=="\K[^"]+')
-            idProduct=$(echo "$line" | grep -oP 'ATTR\{idProduct\}=="\K[^"]+')
+            idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
+            idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
             mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
-            idSerial=$(echo "$line" | grep -oP 'ATTR{idSerial}=="\K[^"]+')
+            idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
             echo "$i. $alias: $kernel, $mode, $idVendor, $idProduct, $idSerial"
             ((i++))
