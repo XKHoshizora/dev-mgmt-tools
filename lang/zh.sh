@@ -65,3 +65,8 @@ ENTER_NEW_PERMISSION="请输入新的权限（例如，0777）："
 DEVICE_PERMISSION_UPDATED="设备权限已成功更新。"
 NO_DEVICE_TO_UPDATE_PERMISSION="没有设备记录可供重置权限。"
 PERMISSION_UPDATE_FAILED="更新设备权限失败。"
+PERMISSION_UPDATE_SUCCESSFULLY="更新设备权限成功。"
+
+# 重新加载 udev 规则
+RELOAD_UDEV_RULES="正在重新加载 udev 规则..."
+RELOADED_AND_TRIGGERED_UDEV_RULES="已重新加载 udev 规则并触发设备。"

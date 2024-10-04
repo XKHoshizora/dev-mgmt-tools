@@ -65,3 +65,8 @@ ENTER_NEW_PERMISSION="Enter the new permission (e.g., 0777):"
 DEVICE_PERMISSION_UPDATED="Device permission updated successfully."
 NO_DEVICE_TO_UPDATE_PERMISSION="No device records found to update permissions."
 PERMISSION_UPDATE_FAILED="Failed to update device permissions."
+PERMISSION_UPDATE_SUCCESSFULLY="Device permissions updated successfully."
+
+# 重新加载 udev 规则
+RELOAD_UDEV_RULES="Reloading udev rules..."
+RELOADED_AND_TRIGGERED_UDEV_RULES="udev rules reloaded and devices triggered."

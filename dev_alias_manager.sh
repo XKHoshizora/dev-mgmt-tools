@@ -99,6 +99,14 @@ function set_device_permissions() {
     return 0
 }
 
+# 重新加载 udev 规则
+function reload_udev_rules() {
+    echo "${RELOAD_UDEV_RULES}"
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
+    echo -e "\n${RELOADED_AND_TRIGGERED_UDEV_RULES}"
+}
+
 # 管理别名
 function manage_alias() {
     echo -e "${WAITING_NEW_DEVICE}\n"
@@ -182,9 +190,11 @@ function manage_alias() {
                                 read -p "${ENTER_PERMISSION}" permission
                                 if set_device_permissions "$permission"; then
                                     # 将新规则写入文件
-                                    new_rule="KERNEL==\"ttyUSB*\", SUBSYSTEM==\"usb\", ATTRS{idVendor}==\"$idVendor\", ATTRS{idProduct}==\"$idProduct\", ATTRS{idSerial}==\"$idSerial\", MODE:=\"$permission\", SYMLINK+=\"$alias\""
+                                    new_rule="KERNEL==\"ttyUSB*\", SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"$idVendor\", ATTRS{idProduct}==\"$idProduct\", ATTRS{idSerial}==\"$idSerial\", MODE=\"$permission\", SYMLINK+=\"$alias\""
                                     echo "$new_rule" >> /etc/udev/rules.d/99-usb-alias.rules
                                     echo "${DEVICE_RECORDED} $alias ${AND_PERMISSION} $permission"
+                                    # 重新加载 udev 规则以确保生效
+                                    reload_udev_rules
                                     break 2
                                 fi
                             done
@@ -221,7 +231,7 @@ function view_recorded_devices() {
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
             idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
-            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{4}')
+            mode=$(echo "$line" | grep -oP 'MODE="\K[0-7]{4}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
             idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
@@ -252,7 +262,7 @@ function delete_device_record() {
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
             idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
-            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{4}')
+            mode=$(echo "$line" | grep -oP 'MODE="\K[0-7]{4}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
             idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
@@ -269,6 +279,8 @@ function delete_device_record() {
             line_to_delete=$(printf '%s\n' "${device_map[$device_number]}" | sed 's/[]\/$*.^[]/\\&/g')
             sed -i "/${line_to_delete}/d" /etc/udev/rules.d/99-usb-alias.rules
             echo "${DEVICE_RECORD_DELETED}"
+            # 重新加载 udev 规则以确保生效
+            reload_udev_rules
         else
             echo "${INVALID_SELECTION}"
         fi
@@ -290,7 +302,7 @@ function rename_device_alias() {
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
             idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
-            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{4}')
+            mode=$(echo "$line" | grep -oP 'MODE="\K[0-7]{4}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
             idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
@@ -324,6 +336,8 @@ function rename_device_alias() {
                     if $updated; then
                         if sudo mv "$temp_file" "$rules_file"; then
                             echo "${ALIAS_UPDATED}"
+                            # 重新加载 udev 规则以确保生效
+                            reload_udev_rules
                             break
                         else
                             echo "${ALIAS_UPDATE_FAILED}"
@@ -356,7 +370,7 @@ function update_device_permissions() {
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
             idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
-            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{4}')
+            mode=$(echo "$line" | grep -oP 'MODE="\K[0-7]{4}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
             idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
@@ -368,7 +382,7 @@ function update_device_permissions() {
         read -p "${ENTER_DEVICE_NUMBER}" device_number
         
         if [[ -n "${device_map[$device_number]}" ]]; then
-            current_mode=$(echo "${device_map[$device_number]}" | grep -oP 'MODE:="\K[0-7]{4}')
+            current_mode=$(echo "${device_map[$device_number]}" | grep -oP 'MODE="\K[0-7]{4}')
             echo -e "\n${CURRENT_PERMISSION} $current_mode"
             while true; do
                 read -p "${ENTER_NEW_PERMISSION}" new_permission
@@ -376,7 +390,7 @@ function update_device_permissions() {
                     local updated=false
                     while IFS= read -r line; do
                         if [[ "$line" == "${device_map[$device_number]}" ]]; then
-                            echo "${line/MODE:=\"$current_mode\"/MODE:=\"$new_permission\"}" >> "$temp_file"
+                            echo "${line/MODE=\"$current_mode\"/MODE=\"$new_permission\"}" >> "$temp_file"
                             updated=true
                         else
                             echo "$line" >> "$temp_file"
@@ -385,7 +399,9 @@ function update_device_permissions() {
 
                     if $updated; then
                         if sudo mv "$temp_file" "$rules_file"; then
-                            echo "Device permissions updated successfully."
+                            echo "${PERMISSION_UPDATE_SUCCESSFULLY}"
+                            # 重新加载 udev 规则以确保生效
+                            reload_udev_rules
                             break
                         else
                             echo "${PERMISSION_UPDATE_FAILED}"

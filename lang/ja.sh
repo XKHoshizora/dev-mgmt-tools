@@ -65,3 +65,8 @@ ENTER_NEW_PERMISSION="新しい権限を入力してください（例：0777）
 DEVICE_PERMISSION_UPDATED="デバイスの権限が正常に更新されました。"
 NO_DEVICE_TO_UPDATE_PERMISSION="権限をリセットするデバイスレコードが見つかりません。"
 PERMISSION_UPDATE_FAILED="デバイスの権限の更新に失敗しました。"
+PERMISSION_UPDATE_SUCCESSFULLY="デバイスの権限の更新に成功しました。"
+
+# 重新加载 udev 规则
+RELOAD_UDEV_RULES="udev ルールを再読み込みしています..."
+RELOADED_AND_TRIGGERED_UDEV_RULES="udev ルールが再読み込みされ、デバイスがトリガーされました。"
