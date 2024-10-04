@@ -221,7 +221,7 @@ function view_recorded_devices() {
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
             idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
-            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
+            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{4}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
             idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
@@ -252,7 +252,7 @@ function delete_device_record() {
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
             idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
-            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
+            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{4}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
             idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
@@ -290,7 +290,7 @@ function rename_device_alias() {
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
             idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
-            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
+            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{4}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
             idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
@@ -356,7 +356,7 @@ function update_device_permissions() {
             alias=$(echo "$line" | grep -oP 'SYMLINK\+="\K[^"]+')
             idVendor=$(echo "$line" | grep -oP 'ATTRS\{idVendor\}=="\K[^"]+')
             idProduct=$(echo "$line" | grep -oP 'ATTRS\{idProduct\}=="\K[^"]+')
-            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{3}')
+            mode=$(echo "$line" | grep -oP 'MODE:="\K[0-7]{4}')
             kernel=$(echo "$line" | grep -oP 'KERNEL=="\K[^"]+')
             idSerial=$(echo "$line" | grep -oP 'ATTRS{idSerial}=="\K[^"]+')
             device_map[$i]="$line"
@@ -368,7 +368,7 @@ function update_device_permissions() {
         read -p "${ENTER_DEVICE_NUMBER}" device_number
         
         if [[ -n "${device_map[$device_number]}" ]]; then
-            current_mode=$(echo "${device_map[$device_number]}" | grep -oP 'MODE:="\K[0-7]{3}')
+            current_mode=$(echo "${device_map[$device_number]}" | grep -oP 'MODE:="\K[0-7]{4}')
             echo -e "\n${CURRENT_PERMISSION} $current_mode"
             while true; do
                 read -p "${ENTER_NEW_PERMISSION}" new_permission
